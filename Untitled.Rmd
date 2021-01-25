@@ -1,0 +1,100 @@
+---
+title: "Predicting Exercise Gestures"
+author: "Nina Quiazon"
+date: "1/25/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Overview
+
+In this project, we will explore which kind of prediction model will give the best result for predicting which activity or exercise is being performed based on indicators collected from the `Weight Lifting Exercise Dataset`. Complete sources of data are indicated below.
+
+Training data: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+Test data: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+Project Link: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har
+
+##Data Processing
+First we load the testing and the training data, and then remove columns that does not help with the prediction: columns with NA values, and columns that were used for identification (i.e., the first 7 columns).
+
+```{r init}
+#Loading data, and treating empty cells as NA values.
+training <- read.csv("pml-training.csv", na.strings = c("NA", "", " "))
+test <- read.csv("pml-testing.csv", na.strings = c("NA", "", " "))
+
+#Removing NA columns
+training <- training[, colSums(is.na(training)) == 0]
+test <- test[, colSums(is.na(test)) == 0]
+
+#Removing the first 7 columns
+training <- training[, -c(1:7)]
+test <- test[, -c(1:7)]
+
+#Setting classe variable as factor
+training$classe <- factor(training$classe)
+
+
+```
+
+We then split the training data to set apart 30% for validation. We will use the `caret` package for this process.
+
+```{r validate, message = FALSE}
+set.seed(7826) 
+library(caret)
+toTrain <- createDataPartition(training$classe, p = 0.7, list = FALSE)
+train <- training[toTrain, ]
+cv <- training[-toTrain, ]
+```
+
+##Prediction Models
+In this section, we will investigate accuracy of prediction models using two methods discussed in class, decision trees and random forests, and then choose the one that gives us the best result. We have chosen to implement only these models as one is an improvement of the other, and random forest perform as good as the other methods (bagging and boosting), if not better.
+
+###Decision Trees
+The following codes will show how the decision tree was created using the `rpart` package.
+```{r trees, message = FALSE, warning = FALSE}
+library(rpart)
+library(rpart.plot)
+library(rattle)
+
+#Fitting the training data in a tree model
+fitTree <- rpart(classe ~ ., train, method = "class")
+
+#Plotting the decision tree
+fancyRpartPlot(fitTree)
+
+#Validating outcomes
+predictTree <- predict(fitTree, cv, type ="class")
+
+# Showing prediction results in validation set
+(confusionTree <- confusionMatrix(predictTree, cv$classe))
+```
+
+###Random Forests
+The following code block will show how the data was fitted in a random forest model using the `randomForest` package.
+```{r forests, message = FALSE, warning = FALSE}
+library(randomForest)
+
+#Fitting the training data in a random forest
+fitForest<- randomForest(classe ~ ., train, mtry = sqrt(dim(train)[2]-1), importance =TRUE)
+
+#Validating outcomes
+predictForest <- predict(fitForest, newdata = cv)
+
+# Showing prediction results in validation set
+(confusionForest <- confusionMatrix(predictForest, cv$classe))
+```
+
+##Conclusion
+We acquired an accuracy of *75.02%* using decision trees, while we had *99.39%* accuracy with random forests. For this data, we found out that random forest fits our data better.
+
+##Prediction
+We will now use our random forest model to predict `classe` in our test set in the code block below.
+
+```{r predict, message = FALSE, warning = FALSE}
+(predict(fitForest, test))
+```
